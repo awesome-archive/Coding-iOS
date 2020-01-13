@@ -13,6 +13,7 @@
 #import "Login.h"
 #import "CountryCodeListViewController.h"
 #import "Ease_2FA.h"
+#import "RewardTipManager.h"
 
 @interface SettingPhoneViewController ()<UITableViewDataSource, UITableViewDelegate>
 @property (strong, nonatomic) TPKeyboardAvoidingTableView *myTableView;
@@ -46,6 +47,9 @@
         [tableView mas_makeConstraints:^(MASConstraintMaker *make) {
             make.edges.equalTo(self.view);
         }];
+        tableView.estimatedRowHeight = 0;
+        tableView.estimatedSectionHeaderHeight = 0;
+        tableView.estimatedSectionFooterHeight = 0;
         tableView;
     });
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"完成" style:UIBarButtonItemStylePlain target:self action:@selector(doneBtnClicked:)];
@@ -63,10 +67,6 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
     return 3;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
-    return 44.0;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
@@ -94,7 +94,7 @@
             weakSelf.code = valueStr;
         };
         cell.phoneCodeBtnClckedBlock = ^(PhoneCodeButton *btn){
-            [weakSelf phoneCodeBtnClicked:btn];
+            [weakSelf phoneCodeBtnClicked:btn withCaptcha:nil];
         };
     }else{
         [cell setPlaceholder:_verifyType == VerifyTypePassword? @" 输入密码": @" 输入两步验证码" value:_verifyStr];
@@ -105,6 +105,14 @@
     [tableView addLineforPlainCell:cell forRowAtIndexPath:indexPath withLeftSpace:kPaddingLeftWidth];
     return cell;
 }
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.row == 2 && [Login curLoginUser].hasNoEamilAndPhone) {
+        return 0;
+    }
+    return 50;
+}
+
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section{
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kScreen_Width, 20)];
     headerView.backgroundColor = kColorTableSectionBg;
@@ -124,19 +132,71 @@
 }
 
 #pragma mark CodeBtn
-- (void)phoneCodeBtnClicked:(PhoneCodeButton *)sender{
+- (void)phoneCodeBtnClicked:(PhoneCodeButton *)sender withCaptcha:(NSString *)captcha{
     if (![_phone isPhoneNo]) {
         [NSObject showHudTipStr:@"手机号码格式有误"];
         return;
     }
     sender.enabled = NO;
-    [[Coding_NetAPIManager sharedManager] request_GeneratePhoneCodeToResetPhone:_phone phoneCountryCode:_phone_country_code block:^(id data, NSError *error) {
+    __weak typeof(self) weakSelf = self;
+    [[Coding_NetAPIManager sharedManager] request_GeneratePhoneCodeToResetPhone:_phone phoneCountryCode:_phone_country_code withCaptcha:captcha block:^(id data, NSError *error) {
         if (data) {
             [NSObject showHudTipStr:@"验证码发送成功"];
             [sender startUpTimer];
         }else{
             [sender invalidateTimer];
+            if (error && error.userInfo[@"msg"] && [[error.userInfo[@"msg"] allKeys] containsObject:@"j_captcha_error"]) {
+                [weakSelf p_showCaptchaAlert:sender];
+            }
         }
+    }];
+}
+
+- (void)p_showCaptchaAlert:(PhoneCodeButton *)sender{
+    SDCAlertController *alertV = [SDCAlertController alertControllerWithTitle:@"提示" message:@"请输入图片验证码" preferredStyle:SDCAlertControllerStyleAlert];
+    UITextField *textF = [UITextField new];
+    textF.layer.sublayerTransform = CATransform3DMakeTranslation(5, 0, 0);
+    textF.backgroundColor = [UIColor whiteColor];
+    [textF doBorderWidth:0.5 color:nil cornerRadius:2.0];
+    UIImageView *imageV = [YLImageView new];
+    imageV.backgroundColor = [UIColor lightGrayColor];
+    imageV.contentMode = UIViewContentModeScaleAspectFit;
+    imageV.clipsToBounds = YES;
+    imageV.userInteractionEnabled = YES;
+    [textF doBorderWidth:0.5 color:nil cornerRadius:2.0];
+    NSURL *imageURL = [NSURL URLWithString:[NSString stringWithFormat:@"%@api/getCaptcha", [NSObject baseURLStr]]];
+    [imageV sd_setImageWithURL:imageURL placeholderImage:nil options:(SDWebImageRetryFailed | SDWebImageRefreshCached | SDWebImageHandleCookies)];
+    
+    [alertV.contentView addSubview:textF];
+    [alertV.contentView addSubview:imageV];
+    [textF mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(alertV.contentView).offset(15);
+        make.height.mas_equalTo(25);
+        make.bottom.equalTo(alertV.contentView).offset(-10);
+    }];
+    [imageV mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.right.equalTo(alertV.contentView).offset(-15);
+        make.left.equalTo(textF.mas_right).offset(10);
+        make.width.mas_equalTo(60);
+        make.height.mas_equalTo(25);
+        make.centerY.equalTo(textF);
+    }];
+    //Action
+    __weak typeof(imageV) weakImageV = imageV;
+    [imageV bk_whenTapped:^{
+        [weakImageV sd_setImageWithURL:imageURL placeholderImage:nil options:(SDWebImageRetryFailed | SDWebImageRefreshCached | SDWebImageHandleCookies)];
+    }];
+    __weak typeof(self) weakSelf = self;
+    [alertV addAction:[SDCAlertAction actionWithTitle:@"取消" style:SDCAlertActionStyleCancel handler:nil]];
+    [alertV addAction:[SDCAlertAction actionWithTitle:@"确定" style:SDCAlertActionStyleDefault handler:nil]];
+    alertV.shouldDismissBlock =  ^BOOL (SDCAlertAction *action){
+        if (![action.title isEqualToString:@"取消"]) {
+            [weakSelf phoneCodeBtnClicked:sender withCaptcha:textF.text];
+        }
+        return YES;
+    };
+    [alertV presentWithCompletion:^{
+        [textF becomeFirstResponder];
     }];
 }
 
@@ -147,7 +207,7 @@
         tipStr = @"手机号码格式有误";
     }else if (_code.length <= 0){
         tipStr = @"请填写手机验证码";
-    }else if (_verifyStr.length <= 0){
+    }else if (_verifyStr.length <= 0 && ![Login curLoginUser].hasNoEamilAndPhone){
         tipStr = _verifyType == VerifyTypePassword? @"请填写密码": @"请填写两步验证码";
     }
     if (tipStr.length > 0) {
@@ -161,7 +221,14 @@
     __weak typeof(self) weakSelf = self;
     [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/account/phone/change" withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
         if (data) {
-            [NSObject showHudTipStr:@"手机号码绑定成功"];
+            if (![Login curLoginUser].is_phone_validated.boolValue && !kTarget_Enterprise) {//之前没有绑定过手机号的，奖励码币
+                [RewardTipManager showTipWithTitle:@"成功完成手机验证 !" rewardPoint:@"0.1 MB"];
+            }else{
+                [NSObject showHudTipStr:@"手机号码绑定成功"];
+            }
+            [Login curLoginUser].is_phone_validated = @(YES);
+            [Login curLoginUser].phone = weakSelf.phone;
+            [Login curLoginUser].phone_country_code = weakSelf.phone_country_code;
             [weakSelf.navigationController popViewControllerAnimated:YES];
         }
     }];

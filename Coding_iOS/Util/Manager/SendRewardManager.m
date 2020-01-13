@@ -73,7 +73,7 @@
         _bgView = [UIView new];
         _contentView = [UIView new];
         _closeBtn = [UIButton new];
-        _userImgV = [UIImageView new];
+        _userImgV = [YLImageView new];
         _titleL = [UILabel new];
         _passwordF = [UITextField new];
         _submitBtn = [UIButton buttonWithStyle:StrapSuccessStyle andTitle:@"确认打赏" andFrame:CGRectMake(0, 0, buttonHeight, buttonHeight) target:self action:@selector(submitBtnClicked)];
@@ -296,7 +296,7 @@
     
     [kKeyWindow addSubview:_bgView];
     [UIView animateWithDuration:0.3 animations:^{
-        _bgView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.6];
+        _bgView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
         _contentView.alpha = 1;
     } completion:^(BOOL finished) {
         if (_isNeedPassword) {

@@ -24,7 +24,7 @@
     if (self) {
         // Initialization code
         if (!_memberIconView) {
-            _memberIconView = [[UIImageView alloc] initWithFrame:CGRectMake(10, ([MemberCell cellHeight]-40)/2, 40, 40)];
+            _memberIconView = [[YLImageView alloc] initWithFrame:CGRectMake(10, ([MemberCell cellHeight]-40)/2, 40, 40)];
             [_memberIconView doCircleFrame];
             [self.contentView addSubview:_memberIconView];
         }
@@ -33,10 +33,14 @@
             _memberNameLabel.font = [UIFont systemFontOfSize:17];
             _memberNameLabel.textColor = kColor222;
             [self.contentView addSubview:_memberNameLabel];
-            [_memberNameLabel mas_makeConstraints:^(MASConstraintMaker *make) {
-                make.left.equalTo(self.memberIconView.mas_right).offset(10);
-                make.height.mas_equalTo(20);
-                make.centerY.equalTo(self.contentView);
+        }
+        if (!_typeIconView) {
+            _typeIconView = [UIImageView new];
+            [self.contentView addSubview:_typeIconView];
+            [_typeIconView mas_makeConstraints:^(MASConstraintMaker *make) {
+                make.left.equalTo(self.memberNameLabel.mas_right).offset(10);
+                make.centerY.equalTo(self.memberNameLabel);
+                make.size.mas_equalTo(CGSizeMake(16, 16));
             }];
         }
         if (!_memberAliasLabel) {
@@ -75,29 +79,14 @@
     if (_curMember.alias.length > 0) {
         _memberAliasLabel.text = _curMember.alias;
         _memberAliasLabel.hidden = NO;
-        [_memberNameLabel mas_updateConstraints:^(MASConstraintMaker *make) {
-            make.centerY.equalTo(self.contentView).offset(-10);
-        }];
     }else{
         _memberAliasLabel.hidden = YES;
-        [_memberNameLabel mas_updateConstraints:^(MASConstraintMaker *make) {
-            make.centerY.equalTo(self.contentView);
-        }];
     }
     switch (_curMember.type.integerValue) {
         case 100://项目所有者
         case 90://项目管理员
         case 75://受限成员
         {
-            if (!_typeIconView) {
-                _typeIconView = [UIImageView new];
-                [self.contentView addSubview:_typeIconView];
-                [_typeIconView mas_makeConstraints:^(MASConstraintMaker *make) {
-                    make.left.equalTo(self.memberNameLabel.mas_right).offset(10);
-                    make.centerY.equalTo(self.memberNameLabel);
-                    make.size.mas_equalTo(CGSizeMake(16, 16));
-                }];
-            }
             [_typeIconView setImage:[UIImage imageNamed:[NSString stringWithFormat:@"member_type_%ld", (long)_curMember.type.integerValue]]];
             _typeIconView.hidden = NO;
         }
@@ -120,17 +109,28 @@
             _leftBtn.hidden = YES;//说是不要私信按钮了
         }else{
             //        自己
-            if (_curMember.type.intValue == 100) {//项目创建者不能「退出」
-                _leftBtn.hidden = YES;
-            }else{//「退出」按钮
-                [_leftBtn setImage:[UIImage imageNamed:@"btn_project_quit"] forState:UIControlStateNormal];
-                [_leftBtn setTitle:@"- 退出项目" forState:UIControlStateNormal];
-                _leftBtn.hidden = NO;
-            }
+            _leftBtn.hidden = YES;//说是也不要退出按钮了
+//            if (_curMember.type.intValue == 100) {//项目创建者不能「退出」
+//                _leftBtn.hidden = YES;
+//            }else{//「退出」按钮
+//                [_leftBtn setImage:[UIImage imageNamed:@"btn_project_quit"] forState:UIControlStateNormal];
+//                [_leftBtn setTitle:@"- 退出项目" forState:UIControlStateNormal];
+//                _leftBtn.hidden = NO;
+//            }
         }
     }else{
         _leftBtn.hidden = YES;
-    }
+    }    
+    [_memberNameLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(self.memberIconView.mas_right).offset(10);
+        make.height.mas_equalTo(20);
+        make.centerY.equalTo(self.contentView).offset(_curMember.alias.length > 0? -10: 0);
+        if (_leftBtn.hidden) {
+            make.right.lessThanOrEqualTo(self.contentView).offset(_typeIconView.hidden? -15: -40);
+        }else{
+            make.right.lessThanOrEqualTo(_leftBtn.mas_left).offset(_typeIconView.hidden? -10: -35);
+        }
+    }];
 }
 
 - (void)leftBtnClicked:(id)sender{
@@ -144,6 +144,7 @@
 }
 
 - (void)prepareForReuse{
+    [super prepareForReuse];
     [_leftBtn stopQueryAnimate];
 }
 @end
